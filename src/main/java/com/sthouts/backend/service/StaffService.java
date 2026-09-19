@@ -1,5 +1,6 @@
 package com.sthouts.backend.service;
 
+import com.sthouts.backend.config.TenantContext;
 import com.sthouts.backend.dto.StaffDto;
 import com.sthouts.backend.model.Staff;
 import com.sthouts.backend.repository.StaffRepository;
@@ -7,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -17,7 +19,12 @@ public class StaffService {
     private final StaffRepository staffRepository;
 
     public List<StaffDto> getAllActiveStaff() {
-        return staffRepository.findByIsActiveTrue().stream()
+        String tenantEmail = TenantContext.getTenantEmail();
+        if (tenantEmail == null || tenantEmail.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Staff> staffList = staffRepository.findByIsActiveTrueAndTenantEmail(tenantEmail);
+        return staffList.stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
@@ -32,6 +39,7 @@ public class StaffService {
                 .joinDate(dto.getJoinDate())
                 .salary(dto.getSalary())
                 .isActive(true)
+                .tenantEmail(TenantContext.getTenantEmail())
                 .build();
         
         return mapToDto(staffRepository.save(staff));

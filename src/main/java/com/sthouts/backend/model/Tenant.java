@@ -45,6 +45,14 @@ public class Tenant {
     @Builder.Default
     private String status = "ACTIVE";
 
+    @Builder.Default
+    private String paymentStatus = "UNPAID"; // "UNPAID", "PAID", "EXEMPT"
+
+    @Builder.Default
+    private String role = "TENANT"; // "TENANT", "DEVELOPER", "SUPER_ADMIN"
+
+    private LocalDateTime subscriptionExpiresAt;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 

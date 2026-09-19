@@ -47,4 +47,6 @@ public class Order {
     @Builder.Default
     @ToString.Exclude
     private List<OrderItem> items = new ArrayList<>();
+
+    private String tenantEmail;
 }

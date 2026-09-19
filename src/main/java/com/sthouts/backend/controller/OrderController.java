@@ -74,4 +74,9 @@ public class OrderController {
     public ResponseEntity<OrderDto> reopenOrder(@PathVariable Long orderId) {
         return ResponseEntity.ok(orderService.reopenOrder(orderId));
     }
+
+    @PostMapping("/checkout-direct")
+    public ResponseEntity<OrderDto> createDirectSale(@RequestBody com.sthouts.backend.dto.CreateDirectSaleRequest request) {
+        return ResponseEntity.ok(orderService.createDirectSale(request));
+    }
 }

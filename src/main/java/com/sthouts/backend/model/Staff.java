@@ -43,4 +43,6 @@ public class Staff {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    private String tenantEmail;
 }

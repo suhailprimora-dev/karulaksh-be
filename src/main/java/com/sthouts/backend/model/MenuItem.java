@@ -27,4 +27,9 @@ public class MenuItem {
     private Double price;
     
     private String category;
+    
+    @jakarta.persistence.Column(columnDefinition = "TEXT")
+    private String imageUrl;
+    
+    private String tenantEmail;
 }

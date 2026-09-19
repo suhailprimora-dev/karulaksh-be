@@ -41,4 +41,6 @@ public class PayrollRecord {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    private String tenantEmail;
 }

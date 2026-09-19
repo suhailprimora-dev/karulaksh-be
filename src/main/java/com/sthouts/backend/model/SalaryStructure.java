@@ -48,4 +48,6 @@ public class SalaryStructure {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    private String tenantEmail;
 }

@@ -33,4 +33,6 @@ public class Attendance {
 
     @CreationTimestamp
     private LocalDateTime createdAt;
+
+    private String tenantEmail;
 }

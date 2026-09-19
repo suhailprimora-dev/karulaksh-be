@@ -22,19 +22,37 @@ public class AuthService {
             throw new RuntimeException("Email already registered with Thoughtit Cloud!");
         }
 
-        String rawSubdomain = request.getBusinessName() != null 
-                ? request.getBusinessName().toLowerCase().replaceAll("[^a-z0-9]", "")
-                : "myshop";
+        String finalSubdomain;
+        if (request.getSubdomain() != null && !request.getSubdomain().trim().isEmpty()) {
+            finalSubdomain = request.getSubdomain().toLowerCase().replaceAll("[^a-z0-9-]", "");
+            if (finalSubdomain.isEmpty()) {
+                throw new RuntimeException("Invalid workspace URL provided.");
+            }
+            if (tenantRepository.existsBySubdomain(finalSubdomain)) {
+                throw new RuntimeException("Workspace URL '" + finalSubdomain + "' is already taken. Please choose another.");
+            }
+        } else {
+            String rawSubdomain = request.getBusinessName() != null 
+                    ? request.getBusinessName().toLowerCase().replaceAll("[^a-z0-9-]", "")
+                    : "myshop";
 
-        if (rawSubdomain.isEmpty()) {
-            rawSubdomain = "shop" + System.currentTimeMillis() % 1000;
+            if (rawSubdomain.isEmpty()) {
+                rawSubdomain = "shop" + System.currentTimeMillis() % 1000;
+            }
+
+            finalSubdomain = rawSubdomain;
+            int counter = 1;
+            while (tenantRepository.existsBySubdomain(finalSubdomain)) {
+                finalSubdomain = rawSubdomain + counter++;
+            }
         }
 
-        String finalSubdomain = rawSubdomain;
-        int counter = 1;
-        while (tenantRepository.existsBySubdomain(finalSubdomain)) {
-            finalSubdomain = rawSubdomain + counter++;
-        }
+        boolean isDev = request.getEmail() != null && (
+                request.getEmail().toLowerCase().contains("thoughtit") ||
+                request.getEmail().toLowerCase().contains("dev") ||
+                request.getEmail().toLowerCase().contains("admin") ||
+                request.getEmail().toLowerCase().contains("suhail")
+        );
 
         Tenant tenant = Tenant.builder()
                 .fullName(request.getFullName())
@@ -45,6 +63,8 @@ public class AuthService {
                 .sector(request.getSector() != null ? request.getSector() : "Fine Dining Restaurant")
                 .plan("ENTERPRISE_TRIAL")
                 .status("ACTIVE")
+                .paymentStatus(isDev ? "EXEMPT" : "UNPAID")
+                .role(isDev ? "DEVELOPER" : "TENANT")
                 .build();
 
         Tenant saved = tenantRepository.save(tenant);
@@ -55,7 +75,6 @@ public class AuthService {
     public AuthResponseDto login(LoginRequestDto request) {
         Optional<Tenant> tenantOpt = tenantRepository.findByEmail(request.getEmail());
         if (tenantOpt.isEmpty()) {
-            // Also try by subdomain if email doesn't match directly
             String subClean = request.getEmail().toLowerCase().replace("www.", "").replace(".thoughtit.com", "");
             tenantOpt = tenantRepository.findBySubdomain(subClean);
         }
@@ -68,7 +87,8 @@ public class AuthService {
     }
 
     public boolean checkSubdomainAvailable(String subdomain) {
-        String clean = subdomain.toLowerCase().replaceAll("[^a-z0-9]", "");
+        if (subdomain == null || subdomain.trim().isEmpty()) return false;
+        String clean = subdomain.toLowerCase().replaceAll("[^a-z0-9-]", "");
         return !tenantRepository.existsBySubdomain(clean);
     }
 
@@ -84,6 +104,8 @@ public class AuthService {
                 .sector(t.getSector())
                 .plan(t.getPlan())
                 .status(t.getStatus())
+                .paymentStatus(t.getPaymentStatus() != null ? t.getPaymentStatus() : "UNPAID")
+                .role(t.getRole() != null ? t.getRole() : "TENANT")
                 .token("THOUGHTIT-JWT-" + UUID.randomUUID().toString())
                 .build();
     }

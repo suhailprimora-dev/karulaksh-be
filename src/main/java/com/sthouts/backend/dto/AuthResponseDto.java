@@ -19,5 +19,7 @@ public class AuthResponseDto {
     private String sector;
     private String plan;
     private String status;
+    private String paymentStatus;
+    private String role;
     private String token;
 }

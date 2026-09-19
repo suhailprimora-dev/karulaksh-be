@@ -1,11 +1,13 @@
 package com.sthouts.backend.service;
 
+import com.sthouts.backend.config.TenantContext;
 import com.sthouts.backend.dto.MenuItemDto;
 import com.sthouts.backend.model.MenuItem;
 import com.sthouts.backend.repository.MenuItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -16,13 +18,19 @@ public class MenuItemService {
     private final MenuItemRepository menuItemRepository;
 
     public List<MenuItemDto> getAllMenuItems() {
-        return menuItemRepository.findAll().stream()
+        String tenantEmail = TenantContext.getTenantEmail();
+        if (tenantEmail == null || tenantEmail.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<MenuItem> items = menuItemRepository.findByTenantEmail(tenantEmail);
+        return items.stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
 
     public MenuItemDto createMenuItem(MenuItemDto menuItemDto) {
         MenuItem menuItem = mapToEntity(menuItemDto);
+        menuItem.setTenantEmail(TenantContext.getTenantEmail());
         MenuItem savedMenuItem = menuItemRepository.save(menuItem);
         return mapToDto(savedMenuItem);
     }
@@ -34,6 +42,7 @@ public class MenuItemService {
         menuItem.setName(menuItemDto.getName());
         menuItem.setPrice(menuItemDto.getPrice());
         menuItem.setCategory(menuItemDto.getCategory());
+        menuItem.setImageUrl(menuItemDto.getImageUrl());
         
         MenuItem updatedMenuItem = menuItemRepository.save(menuItem);
         return mapToDto(updatedMenuItem);
@@ -52,6 +61,7 @@ public class MenuItemService {
                 .name(menuItem.getName())
                 .price(menuItem.getPrice())
                 .category(menuItem.getCategory())
+                .imageUrl(menuItem.getImageUrl())
                 .build();
     }
 
@@ -60,6 +70,7 @@ public class MenuItemService {
                 .name(menuItemDto.getName())
                 .price(menuItemDto.getPrice())
                 .category(menuItemDto.getCategory())
+                .imageUrl(menuItemDto.getImageUrl())
                 .build();
     }
 }

@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class SignupRequestDto {
     private String fullName;
     private String businessName;
+    private String subdomain;
     private String email;
     private String password;
     private String sector;

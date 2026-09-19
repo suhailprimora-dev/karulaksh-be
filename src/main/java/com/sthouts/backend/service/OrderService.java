@@ -1,5 +1,6 @@
 package com.sthouts.backend.service;
 
+import com.sthouts.backend.config.TenantContext;
 import com.sthouts.backend.dto.OrderDto;
 import com.sthouts.backend.dto.OrderItemDto;
 import com.sthouts.backend.dto.PaginatedOrderHistoryDto;
@@ -18,6 +19,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import java.util.Collections;
+
 @Service
 @RequiredArgsConstructor
 public class OrderService {
@@ -25,22 +28,43 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
 
+    private final com.sthouts.backend.repository.PosSettingsRepository posSettingsRepository;
+    private final com.sthouts.backend.repository.PosNotificationRepository posNotificationRepository;
+
+    private Optional<Order> findActiveOrder() {
+        String tenantEmail = TenantContext.getTenantEmail();
+        if (tenantEmail == null || tenantEmail.trim().isEmpty()) {
+            return Optional.empty();
+        }
+        return orderRepository.findByStatusAndTenantEmail("ACTIVE", tenantEmail);
+    }
+
+    private List<Order> getAllOrdersForTenant() {
+        String tenantEmail = TenantContext.getTenantEmail();
+        if (tenantEmail == null || tenantEmail.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        return orderRepository.findByTenantEmail(tenantEmail);
+    }
+
     @Transactional
     public OrderDto getActiveOrderOrCreate() {
-        Optional<Order> activeOrderOpt = orderRepository.findByStatus("ACTIVE");
+        Optional<Order> activeOrderOpt = findActiveOrder();
         if (activeOrderOpt.isPresent()) {
             return mapToDto(activeOrderOpt.get());
         }
 
+        String tenantEmail = TenantContext.getTenantEmail();
         Order newOrder = Order.builder()
                 .billNo("B" + (int)(1000 + Math.random() * 9000))
                 .status("ACTIVE")
-                .gstRate(5.0) // default 5% based on UI screenshot
+                .gstRate(0.0)
                 .discount(0.0)
                 .serviceCharge(0.0)
                 .subtotal(0.0)
                 .totalAmount(0.0)
                 .createdAt(LocalDateTime.now())
+                .tenantEmail(tenantEmail)
                 .build();
         
         return mapToDto(orderRepository.save(newOrder));
@@ -137,7 +161,7 @@ public class OrderService {
     }
 
     public List<OrderDto> getSettledOrders() {
-        return orderRepository.findAll().stream()
+        return getAllOrdersForTenant().stream()
                 .filter(o -> "SETTLED".equals(o.getStatus()))
                 .sorted((o1, o2) -> o2.getCreatedAt().compareTo(o1.getCreatedAt()))
                 .map(this::mapToDto)
@@ -145,7 +169,7 @@ public class OrderService {
     }
 
     public PaginatedOrderHistoryDto getSettledOrdersPaginated(int page, int size, String search, String paymentMethod, String fromDate, String toDate) {
-        List<Order> filtered = orderRepository.findAll().stream()
+        List<Order> filtered = getAllOrdersForTenant().stream()
                 .filter(o -> "SETTLED".equalsIgnoreCase(o.getStatus()) || "COMPLETED".equalsIgnoreCase(o.getStatus()) || "PAID".equalsIgnoreCase(o.getStatus()))
                 .filter(o -> {
                     if (search != null && !search.trim().isEmpty()) {
@@ -194,7 +218,7 @@ public class OrderService {
 
     @Transactional
     public void cancelActiveOrder() {
-        Optional<Order> activeOrderOpt = orderRepository.findByStatus("ACTIVE");
+        Optional<Order> activeOrderOpt = findActiveOrder();
         activeOrderOpt.ifPresent(orderRepository::delete);
     }
 
@@ -202,7 +226,7 @@ public class OrderService {
     public OrderDto reopenOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found"));
-        Optional<Order> currentActive = orderRepository.findByStatus("ACTIVE");
+        Optional<Order> currentActive = findActiveOrder();
         if (currentActive.isPresent() && !currentActive.get().getId().equals(orderId)) {
             orderRepository.delete(currentActive.get());
         }
@@ -249,5 +273,44 @@ public class OrderService {
                 .createdAt(order.getCreatedAt())
                 .items(itemDtos)
                 .build();
+    }
+
+    @Transactional
+    public OrderDto createDirectSale(com.sthouts.backend.dto.CreateDirectSaleRequest request) {
+        String tenantEmail = TenantContext.getTenantEmail();
+        if (tenantEmail == null || tenantEmail.trim().isEmpty()) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        Order order = Order.builder()
+                .billNo(request.getBillNo() != null ? request.getBillNo() : "R-" + (int)(1000 + Math.random() * 9000))
+                .customerName(request.getCustomerName() != null ? request.getCustomerName() : "Walk-in Customer")
+                .discount(request.getDiscount() != null ? request.getDiscount() : 0.0)
+                .serviceCharge(request.getServiceCharge() != null ? request.getServiceCharge() : 0.0)
+                .paymentMethod(request.getPaymentMethod() != null ? request.getPaymentMethod() : "ONLINE")
+                .gstRate(request.getGstRate() != null ? request.getGstRate() : 0.0)
+                .status("SETTLED")
+                .createdAt(LocalDateTime.now())
+                .tenantEmail(tenantEmail)
+                .items(new java.util.ArrayList<>())
+                .build();
+
+        Order savedOrder = orderRepository.save(order);
+
+        if (request.getItems() != null) {
+            for (com.sthouts.backend.dto.OrderItemDto itemDto : request.getItems()) {
+                OrderItem item = OrderItem.builder()
+                        .order(savedOrder)
+                        .menuItemId(itemDto.getMenuItemId())
+                        .name(itemDto.getName())
+                        .price(itemDto.getPrice())
+                        .quantity(itemDto.getQuantity())
+                        .build();
+                savedOrder.getItems().add(item);
+            }
+        }
+
+        recalculateTotals(savedOrder);
+        return mapToDto(orderRepository.save(savedOrder));
     }
 }

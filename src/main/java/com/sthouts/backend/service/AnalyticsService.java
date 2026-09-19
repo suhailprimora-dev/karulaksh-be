@@ -1,5 +1,6 @@
 package com.sthouts.backend.service;
 
+import com.sthouts.backend.config.TenantContext;
 import com.sthouts.backend.dto.*;
 import com.sthouts.backend.model.Order;
 import com.sthouts.backend.repository.OrderRepository;
@@ -18,8 +19,16 @@ public class AnalyticsService {
 
     private final OrderRepository orderRepository;
 
+    private List<Order> getAllOrdersForTenant() {
+        String tenantEmail = TenantContext.getTenantEmail();
+        if (tenantEmail == null || tenantEmail.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        return orderRepository.findByTenantEmail(tenantEmail);
+    }
+
     private List<Order> getFilteredOrders(String range, String startDate, String endDate) {
-        List<Order> orders = orderRepository.findAll().stream()
+        List<Order> orders = getAllOrdersForTenant().stream()
                 .filter(o -> "SETTLED".equals(o.getStatus()))
                 .collect(Collectors.toList());
 
@@ -108,7 +117,7 @@ public class AnalyticsService {
     }
 
     public TodayYesterdayDto getTodayYesterday() {
-        List<Order> orders = orderRepository.findAll().stream()
+        List<Order> orders = getAllOrdersForTenant().stream()
                 .filter(o -> ("SETTLED".equalsIgnoreCase(o.getStatus()) || "COMPLETED".equalsIgnoreCase(o.getStatus()) || "PAID".equalsIgnoreCase(o.getStatus()) || o.getStatus() == null) && o.getCreatedAt() != null)
                 .collect(Collectors.toList());
 

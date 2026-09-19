@@ -1,5 +1,6 @@
 package com.sthouts.backend.service;
 
+import com.sthouts.backend.config.TenantContext;
 import com.sthouts.backend.dto.PayrollRecordDto;
 import com.sthouts.backend.dto.SalaryStructureDto;
 import com.sthouts.backend.model.PayrollRecord;
@@ -10,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -23,7 +25,12 @@ public class SalaryService {
     private final PayrollRepository payrollRepository;
 
     public List<SalaryStructureDto> getAllSalaryStructures() {
-        return salaryStructureRepository.findAll().stream()
+        String tenantEmail = TenantContext.getTenantEmail();
+        if (tenantEmail == null || tenantEmail.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<SalaryStructure> list = salaryStructureRepository.findByTenantEmail(tenantEmail);
+        return list.stream()
                 .map(this::mapStructureToDto)
                 .collect(Collectors.toList());
     }
@@ -49,6 +56,7 @@ public class SalaryService {
             if (dto.getTravelAllowance() != null) structure.setTravelAllowance(dto.getTravelAllowance());
             if (dto.getPfDeduction() != null) structure.setPfDeduction(dto.getPfDeduction());
             if (dto.getTaxDeduction() != null) structure.setTaxDeduction(dto.getTaxDeduction());
+            if (structure.getTenantEmail() == null) structure.setTenantEmail(TenantContext.getTenantEmail());
         } else {
             structure = SalaryStructure.builder()
                     .staffId(staffId)
@@ -58,6 +66,7 @@ public class SalaryService {
                     .travelAllowance(dto.getTravelAllowance() != null ? dto.getTravelAllowance() : 0.0)
                     .pfDeduction(dto.getPfDeduction() != null ? dto.getPfDeduction() : 0.0)
                     .taxDeduction(dto.getTaxDeduction() != null ? dto.getTaxDeduction() : 0.0)
+                    .tenantEmail(TenantContext.getTenantEmail())
                     .build();
         }
         structure = salaryStructureRepository.save(structure);
@@ -65,16 +74,20 @@ public class SalaryService {
     }
 
     public List<PayrollRecordDto> getPayrollRecords(String month, String staffIdStr) {
+        String tenantEmail = TenantContext.getTenantEmail();
+        if (tenantEmail == null || tenantEmail.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
         Long staffId = parseLongOrNull(staffIdStr);
         List<PayrollRecord> records;
         if (month != null && !month.trim().isEmpty() && staffId != null) {
             records = payrollRepository.findByStaffIdAndMonth(staffId, month.trim());
         } else if (month != null && !month.trim().isEmpty()) {
-            records = payrollRepository.findByMonth(month.trim());
+            records = payrollRepository.findByMonthAndTenantEmail(month.trim(), tenantEmail);
         } else if (staffId != null) {
             records = payrollRepository.findByStaffId(staffId);
         } else {
-            records = payrollRepository.findAll();
+            records = payrollRepository.findAll().stream().filter(r -> tenantEmail.equals(r.getTenantEmail())).collect(Collectors.toList());
         }
         return records.stream()
                 .map(this::mapPayrollToDto)
@@ -93,6 +106,7 @@ public class SalaryService {
             if (dto.getNetSalary() != null) record.setNetSalary(dto.getNetSalary());
             if (dto.getStatus() != null) record.setStatus(dto.getStatus());
             if (dto.getPaidAt() != null) record.setPaidAt(dto.getPaidAt());
+            if (record.getTenantEmail() == null) record.setTenantEmail(TenantContext.getTenantEmail());
         } else {
             record = PayrollRecord.builder()
                     .staffId(staffId)
@@ -100,6 +114,7 @@ public class SalaryService {
                     .netSalary(dto.getNetSalary() != null ? dto.getNetSalary() : 0.0)
                     .status(dto.getStatus() != null ? dto.getStatus() : "paid")
                     .paidAt(dto.getPaidAt() != null ? dto.getPaidAt() : LocalDateTime.now().toString())
+                    .tenantEmail(TenantContext.getTenantEmail())
                     .build();
         }
         record = payrollRepository.save(record);
